@@ -2,8 +2,7 @@
  * SHADY RC EVOLUTION : A quick 'n dirty RC setup for droids previously using SHADOW
  * 2019-10-23
  * 
- * Tested with a Turnigy Evolution transmitter and Turnigy TGY-iA6C receiver connected to Serial1 Rx
- * (pin #19 of the Arduino Mega ADK)
+ * Tested with a Turnigy Evolution transmitter and Turnigy TGY-iA6C
  * 
  * ENSURE THAT FAILSAFE MODE WORKS.
  * On your transmitter, go into Settings->Failsafe and enable Failsafe for Channels 1-4
@@ -92,6 +91,7 @@ int txChannels[9];        //This holds our transmitter channel values. we have 8
 int prevTxChannels[9];
 unsigned long prevManualDomeMove;
 bool isAutodomeEnabled=false;
+bool prevAutodomeEnabled=true;
 unsigned long previousAutodomeMillis = millis();
 unsigned long autodomeInterval;
 int currentAutodomeSpeed;
@@ -432,18 +432,31 @@ void loop() {
 
   if (txChannels[8]!=prevTxChannels[8]) {
     if (txChannels[8]==1500) { /*switch is centered, do nuthin*/ }
-    else if (txChannels[8]==1000) {
-      //play a random beepboop
-      playMP3(random(0,19));
-    }
-    else if (txChannels[8]==2000) {
-      if (txChannels[7]==1000) {
+    else if (txChannels[8]<=1000) {
+      // Right trigger switch was pushed up: >>>>>>>>>>>
+      if (txChannels[7]<=1200) {
+        // center knob is all the way counter-clockwise
         playMP3(random(76,80)); //if we're at the very end play a random sad sound
       }
-      else if (txChannels[7]==2000) {
+      else if (txChannels[7]<=1400) {
+        // center knob is a little right of center
+        playMP3(128); //short circuit
+      }
+      else if (txChannels[7]>=1800) {
+        // center knob is almost all the way clockwise
         playMP3(31); //laugh
       }
+      else if (txChannels[7]>=1600) {
+        // center knob is a little left of center
+        playMP3(183); //laugh
+      }
       else {
+        // center knob is close to center
+        playMP3(random(1,19)); //play a random beepboop
+      }
+    }
+    else if (txChannels[8]>=2000) {      
+        // Right trigger switch was pushed down: >>>>>>>>>>>
         //play a specific sound based on the knob position (knob value from 1980 to 1020)
         //aside from the extremities, we've got 13 knob positions. each one occupies 60 values of the knob 
         #define numChoons 13
@@ -451,16 +464,27 @@ void loop() {
         #define lowerKnobVal 1000
         #define knobStep (upperKnobVal-lowerKnobVal)/numChoons
         byte choons[numChoons] = {152,183,128,201,202,203,204,205,206,207,208,209,31};
+        //152=leia, 183=wolfwhistle, 128=shortCircuit  <<< TO-DO : SWAP OUT 183 & 128 FOR MUSIC, SINCE THEY'RE COVERED BY THE "SWITCH UP" STUFF
         int knobval=upperKnobVal;      
         byte choonNum=0;
         while (knobval > (upperKnobVal-(numChoons*knobStep)) ) {
           if (txChannels[7]<=knobval&&txChannels[7]>(knobval-knobStep)) {
+            #if (DEBUG==1)
+              Serial_Debug.print("chan7=");
+              Serial_Debug.print(txChannels[7]);
+              Serial_Debug.print(" is between ");
+              Serial_Debug.print(knobval);
+              Serial_Debug.print(" and ");
+              Serial_Debug.print(knobval-knobStep);
+              Serial_Debug.print(" choon");
+              Serial_Debug.print(choonNum);
+              Serial_Debug.println(". ");
+            #endif
             playMP3(choons[choonNum]); 
           }
           knobval=knobval-knobStep;
           choonNum++;
         }
-      }
     }
   }
 
@@ -492,9 +516,12 @@ void loop() {
   }
   if ((txChannels[3]!=prevTxChannels[3] && txChannels[8]!=1500) || txChannels[3]<1005 || txChannels[7]==2000)  {
     isAutodomeEnabled=false;
-    #if (DEBUG==1)
-      Serial_Debug.println("autodome disabled");
-    #endif
+    if (prevAutodomeEnabled==true) {
+      prevAutodomeEnabled=false;
+      #if (DEBUG==1)
+        Serial_Debug.println("autodome disabled");
+      #endif
+    }
   }
   domeDrive();
   
