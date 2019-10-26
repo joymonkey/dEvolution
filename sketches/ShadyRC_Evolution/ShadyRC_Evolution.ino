@@ -448,7 +448,7 @@ void loop() {
       }
       else if (txChannels[7]>=1600) {
         // center knob is a little left of center
-        playMP3(183); //laugh
+        playMP3(183); //wolf whistle
       }
       else {
         // center knob is close to center
@@ -461,10 +461,10 @@ void loop() {
         //aside from the extremities, we've got 13 knob positions. each one occupies 60 values of the knob 
         #define numChoons 13
         #define upperKnobVal 2000
-        #define lowerKnobVal 1000
+        #define lowerKnobVal 1001
         #define knobStep (upperKnobVal-lowerKnobVal)/numChoons
-        byte choons[numChoons] = {152,183,128,201,202,203,204,205,206,207,208,209,31};
-        //152=leia, 183=wolfwhistle, 128=shortCircuit  <<< TO-DO : SWAP OUT 183 & 128 FOR MUSIC, SINCE THEY'RE COVERED BY THE "SWITCH UP" STUFF
+        byte choons[numChoons] = {152,183,128,201,202,203,204,205,206,207,208,209,210};
+        //152=leia, 183=wolfwhistle, 128=shortCircuit  <<< TO-DO : SWAP OUT 183, 128 FOR MUSIC, SINCE THEY'RE COVERED BY THE "SWITCH UP" STUFF
         int knobval=upperKnobVal;      
         byte choonNum=0;
         while (knobval > (upperKnobVal-(numChoons*knobStep)) ) {
@@ -492,6 +492,7 @@ void loop() {
     //use the left stick's vertical axis (ch3) to set volume
     //all the way up ch3=2000
     volume( map(txChannels[3],1000,2000,minVolume,maxVolume) ); //volume levels between 100 and 255 are too quiet
+    prevManualDomeMove=currentMillis; //prevents us from going into autodome as soon as the knob moves from 2000
   }
 
   if (txChannels[1]!=prevTxChannels[1] || txChannels[2]!=prevTxChannels[2]) {
