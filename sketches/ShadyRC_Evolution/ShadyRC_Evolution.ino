@@ -1,6 +1,6 @@
 /*
  * SHADY RC EVOLUTION : A quick 'n dirty RC setup for droids previously using SHADOW
- * 2019-10-23
+ * 2019-10-25
  * 
  * Tested with a Turnigy Evolution transmitter and Turnigy TGY-iA6C
  * 
