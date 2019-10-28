@@ -1,14 +1,14 @@
 /*
  * SHADY RC EVOLUTION : A quick 'n dirty RC setup for droids previously using SHADOW
  * 2019-10-25
- * 
+ *
  * Tested with a Turnigy Evolution transmitter and Turnigy TGY-iA6C
- * 
+ *
  * ENSURE THAT FAILSAFE MODE WORKS.
  * On your transmitter, go into Settings->Failsafe and enable Failsafe for Channels 1-4
  * Channels should be set to go to 0% when failsafe is detected (ie, when the receiver loses connection
  * with the transmitter)
- * 
+ *
  * Channels are set up as follows, mostly using the factory default channel assignmens of the Turnigy Evolution...
  * Right Stick Ch.1 = Steering
  * Right Stick Ch.2 = Throttle
@@ -18,14 +18,14 @@
  *   SwA (mid) Ch.6 = Foot Drive Enable (up=off, down=on)
  *  VrA (knob) Ch.7 = sound/function selector
  * SwC (right) Ch.8 = Trigger Sounds   *** Factory default for Ch.8 is disabled!)
- * 
+ *
  * Arduino Mega 2560/ADK Pinout
  *   Left Motor PWM : 44
  *  Right Motor PWM : 45
  *   MP3 Trigger Rx : 18 (Serial1 Tx)
  * iBus RC Receiver : 15 (Serial3 Rx)
  * SyRen/Sabertooth : 16 (Serial2 Tx)
- * 
+ *
  * MP3 Trigger Note:
  * Files are now referenced by filename instead of file order. MP3 files need to begin with 3 digits, like...
  * 001_doodoo.mp3
@@ -36,11 +36,11 @@
  * If your MP3Trigger is very old (pre 2013), you may need a firmware update for this to work.
  * For some reason my MP3Trigger's SD card has an ini file that tells it to run at 9600 baud. I believe the
  * default is 38400 baud, so you may need to change baud rate in this sketch or your ini file to get beepboops.
- * 
+ *
  * Libraries required :
  * https://github.com/bmellink/IBusBM
  * https://www.dimensionengineering.com/software/SabertoothArduinoLibraries.zip
- * 
+ *
  * Displaying Your Main Battery Level on the Turnigy Evolution:
  * On the TGY-iA6C receiver there is a little 2-pin JST port labeled BDet (short for bidet?). You can connect
  * your main battery here and its voltage will be sent to the transmitter for display. However, the BDet is
@@ -48,7 +48,7 @@
  * If you're using a 6S battery (25.2V), it would damage the receiver, so I connect my main battery using a
  * simple voltage divider using two 10K resistors. Then I tell the Evolution Transmitter to pretend that
  * we've got a 3S battery instead.
- * 
+ *
  */
 
 #define FOOT_CONTROLLER 1 //0 for Sabertooth Serial or 1 for individual R/C output (for Q85 motors with 1 controller for each foot, or Sabertooth Mode 2 Independant Mixing)
@@ -57,20 +57,24 @@
 #define SYREN_ADDR         129      // Serial Address for Dome Syren
 #define SABERTOOTH_ADDR    128      // Serial Address for Foot Sabertooth (if used)
 
-#define DEBUG 1           //1 to enable debug mode (may make control choppy), 0 to disable 
+#define DEBUG 1           //1 to enable debug mode (may make control choppy), 0 to disable
 
-#define Serial_MP3 Serial1      //Serial port used by the Sparkfun MP3 Trigger 
-#define Serial_Receiver Serial3 //Serial port used by the iBus RC receiver
-#define Serial_ST Serial2       //Serial port used by Sabertooth (feet) and/or Syren (dome)
+#define Serial_MP3 Serial1      //Serial port used by the Sparkfun MP3 Trigger (only uses the TX pin from the Arduino)
+#define Serial_Receiver Serial3 //Serial port used by the iBus RC receiver (only uses the TX pin from the Arduino)
+#define Serial_ST Serial2       //Serial port used by Sabertooth (feet) and/or Syren (dome) (only uses the TX pin from the Arduino)
 #define Serial_Debug Serial     //Serial port used by for debug messages
-#define invertDome 1      //change this to a 1 or 0 to change the direction that the dome spins  
+#define Serial_JEDI_RX 10       //softserial pin used to receive JEDI/Jawalite commands
+#define Serial_JEDI_TX 11       //softserial pin used to send JEDI/Jawalite commands
+#define JEDI_Baudrate 2400
+
+#define invertDome 1      //change this to a 1 or 0 to change the direction that the dome spins
 #define leftFootPin 44    //connect this pin to motor controller for left foot (R/C mode)
 #define rightFootPin 45   //connect this pin to motor controller for right foot (R/C mode)
 #define invertLeft  0     //foot spinning the wrong way? change this to 1 or 0
 #define invertRight 0     //foot spinning the wrong way? change this to 1 or 0
 #define joystickFootDeadZoneRange 10
 int domeRotationSpeed,prevDomeRotationSpeed;
-#define motorControllerBaudRate 9600 //bjaud rate for Syren and Sabertooth
+#define motorControllerBaudRate 9600 //baud rate for Syren and Sabertooth
 
 byte vol = 50; // initial volume level, 0 = full volume, 255 off
 #define minVolume 100   //255=silent, anything over 100 is too quiet for my liking so I never go there
@@ -104,7 +108,7 @@ unsigned int autodomeMoveMillis;
 #define autoChatty 6 //how chatty do you want your droid? 10 will beepboop on almost every autodome move, 1 should be fairly rarely
 
 #include <Sabertooth.h>
-#if FOOT_CONTROLLER != 1 
+#if FOOT_CONTROLLER != 1
   Sabertooth *ST=new Sabertooth(SABERTOOTH_ADDR, Serial_ST); //we'll use a Sabertooth motor controller
   // ** CODE FOR SABERTOOTH FOOT DRIVE IS NOT IN PLACE, FEEL FREE TO WORK ON IT! ** //
 #endif
@@ -113,16 +117,19 @@ Sabertooth *SyR=new Sabertooth(SYREN_ADDR, Serial_ST);
 #if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__) || defined(__IMXRT1052__) || defined(__IMXRT1062__)
   #include <PWMServo.h> //regular Servo library doesn't work on Teensy, so we use PWMServo instead
   PWMServo leftFootSignal;
-  PWMServo rightFootSignal; 
+  PWMServo rightFootSignal;
 #else
   #include <Servo.h>
   Servo leftFootSignal;
-  Servo rightFootSignal; 
+  Servo rightFootSignal;
 #endif
+
+#include <SoftwareSerial.h>
+SoftwareSerial Serial_JEDI(Serial_JEDI_RX, Serial_JEDI_TX); // RX, TX
 
 //library used for iBus RC receiver...
 #include <IBusBM.h>
-IBusBM IBus; 
+IBusBM IBus;
 
 // quick function to stop the feet depending on which drive system we're using...
 void stopFeet() {
@@ -136,7 +143,7 @@ void stopFeet() {
 
 void footMotorDrive() {
   //Flood control prevention
-  if ((currentMillis-previousFootMillis)<serialFootLatency) return;  
+  if ((currentMillis-previousFootMillis)<serialFootLatency) return;
   else if (isStickEnabled==1) {
     //it's been a moment since we thought about doing anything with the feet. Do that thing.
     previousFootMillis=currentMillis;
@@ -149,13 +156,13 @@ void footMotorDrive() {
           Serial_Debug.print(F(","));
           Serial_Debug.println(rightFoot);
         #endif
-        //now move those feet!       
+        //now move those feet!
         leftFootSignal.write(leftFoot);
         rightFootSignal.write(rightFoot);
     #endif
     // ** TO-DO! PUT STUFF HERE FOR PEOPLE WITH SABERTOOTH SERIAL FOOT DRIVE
   }
-} 
+}
 
 void playMP3(byte MP3num) {
   //previously SHADOW used the trigger.play(53) command to play MP3's
@@ -179,11 +186,11 @@ void volume(byte level) {
 
 void domeDrive() {
   //Flood control prevention
-  if ((currentMillis-previousDomeMillis) < serialDomeLatency || (txChannels[4]<1000 || txChannels[4]>2000)) return; 
+  if ((currentMillis-previousDomeMillis) < serialDomeLatency || (txChannels[4]<1000 || txChannels[4]>2000)) return;
   if (txChannels[4]!=prevTxChannels[4]) {
     //cancel autodome if the stick has moved
     prevManualDomeMove=currentMillis;
-    isAutodomeEnabled=false; 
+    isAutodomeEnabled=false;
     currentAutodomeSpeed=0;
     currentAutodomeState=1; //0=waiting, 1=initial move, 2=return move
   }
@@ -193,7 +200,7 @@ void domeDrive() {
     #else
       domeRotationSpeed=map(txChannels[4],1000,2000,127,-127);
     #endif
-  }  
+  }
   else {
     //Autodome is on, bitches! Determine if we're rotating right now or waiting
     if (currentMillis-previousAutodomeMillis>autodomeInterval) {
@@ -221,7 +228,7 @@ void domeDrive() {
         #endif
         currentAutodomeState=1;
       }
-      else { 
+      else {
         currentAutodomeState=2;
         #if (DEBUG==1)
           Serial_Debug.println("hold up");
@@ -243,7 +250,7 @@ void domeDrive() {
     else domeRotationSpeed=0;
   }
   if (domeRotationSpeed!=prevDomeRotationSpeed) {
-    SyR->motor(domeRotationSpeed);  
+    SyR->motor(domeRotationSpeed);
     #if (DEBUG==1)
       if (domeRotationSpeed!=0) {
         //Serial_Debug.print(txChannels[4]);
@@ -253,19 +260,19 @@ void domeDrive() {
     #endif
   }
   prevDomeRotationSpeed=domeRotationSpeed;
-}  
+}
 
 #if FOOT_CONTROLLER == 1
 void mixBHD(byte stickX, byte stickY, byte maxDriveSpeed){  //maxDriveSpeed should be between 90 and 180
     // This is BigHappyDude's mixing function, for differential (tank) style drive using two motor controllers.
-    // Takes a joysticks X and Y values, mixes using the diamond mix, and output a value 0-180 for left and right motors.     
+    // Takes a joysticks X and Y values, mixes using the diamond mix, and output a value 0-180 for left and right motors.
     // 180,180 = both feet full speed forward.
     // 000,000 = both feet full speed reverse.
     // 180,000 = left foot full forward, right foot full reverse (spin droid clockwise)
     // 000,180 = left foot full reverse, right foot full forward (spin droid counter-clockwise)
     // 090,090 = no movement
-    // for simplicity, we think of this diamond matrix as a range from -100 to +100 , then map the final values to servo range (0-180) at the end 
-    //  Ramping and Speed mode applied on the droid.  
+    // for simplicity, we think of this diamond matrix as a range from -100 to +100 , then map the final values to servo range (0-180) at the end
+    //  Ramping and Speed mode applied on the droid.
     if(((stickX <= 113) || (stickX >= 141)) || ((stickY <= 113) || (stickY >= 141))){  //  if movement outside deadzone
       //  Map to easy grid -100 to 100 in both axis, including deadzones.
       int YDist = 0;  // set to 0 as a default value if no if used.
@@ -281,7 +288,7 @@ void mixBHD(byte stickX, byte stickY, byte maxDriveSpeed){  //maxDriveSpeed shou
        XDist = (map(stickX, 141, 255, 1, turnspeed));   //  Map the right direction stick value to Turn speed
       }
       //  Constrain to Diamond values.  using 2 line equations and find the intersect, boiled down to the minimum
-      //  This was the inspiration; https://github.com/declanshanaghy/JabberBot/raw/master/Docs/Using%20Diamond%20Coordinates%20to%20Power%20a%20Differential%20Drive.pdf 
+      //  This was the inspiration; https://github.com/declanshanaghy/JabberBot/raw/master/Docs/Using%20Diamond%20Coordinates%20to%20Power%20a%20Differential%20Drive.pdf
       float TempYDist = YDist;
       float TempXDist = XDist;
       if (YDist>(XDist+100)) {  //  if outside top left.  equation of line is y=x+Max, so if y > x+Max then it is above line
@@ -354,9 +361,11 @@ void getTransmitterValues() {
   }
 }
 
-void setup() {  
+void setup() {
 
   randomSeed(analogRead(A4));
+
+
 
   #if (DEBUG==1)
     Serial_Debug.begin(115200);  // initialize serial port for debug
@@ -386,6 +395,8 @@ void setup() {
   delay(50);
   playMP3(255);
 
+  Serial_JEDI.begin(JEDI_Baudrate);
+
   #if (DEBUG==1)
     Serial_Debug.println(F("/setup"));
   #endif
@@ -403,7 +414,7 @@ void loop() {
       Serial_Debug.print("drv ");
     #endif
     if (txChannels[6]==2000) {
-      isStickEnabled = true; 
+      isStickEnabled = true;
       leftFootSignal.attach(leftFootPin);
       rightFootSignal.attach(rightFootPin);
       #if (DEBUG==1)
@@ -411,7 +422,7 @@ void loop() {
       #endif
     }
     else {
-      isStickEnabled = false; 
+      isStickEnabled = false;
       leftFootSignal.detach();
       rightFootSignal.detach();
       #if (DEBUG==1)
@@ -440,6 +451,7 @@ void loop() {
       }
       else if (txChannels[7]<=1400) {
         // center knob is a little right of center
+        Serial_JEDI.print("\r@0T4\r"); //send an 0T4 to the dome so R5 can blow his motivator, or R2 can change up his logics
         playMP3(128); //short circuit
       }
       else if (txChannels[7]>=1800) {
@@ -455,17 +467,17 @@ void loop() {
         playMP3(random(1,19)); //play a random beepboop
       }
     }
-    else if (txChannels[8]>=2000) {      
+    else if (txChannels[8]>=2000) {
         // Right trigger switch was pushed down: >>>>>>>>>>>
         //play a specific sound based on the knob position (knob value from 1980 to 1020)
-        //aside from the extremities, we've got 13 knob positions. each one occupies 60 values of the knob 
+        //aside from the extremities, we've got 13 knob positions. each one occupies 60 values of the knob
         #define numChoons 13
         #define upperKnobVal 2000
         #define lowerKnobVal 1001
         #define knobStep (upperKnobVal-lowerKnobVal)/numChoons
         byte choons[numChoons] = {152,183,128,201,202,203,204,205,206,207,208,209,210};
         //152=leia, 183=wolfwhistle, 128=shortCircuit  <<< TO-DO : SWAP OUT 183, 128 FOR MUSIC, SINCE THEY'RE COVERED BY THE "SWITCH UP" STUFF
-        int knobval=upperKnobVal;      
+        int knobval=upperKnobVal;
         byte choonNum=0;
         while (knobval > (upperKnobVal-(numChoons*knobStep)) ) {
           if (txChannels[7]<=knobval&&txChannels[7]>(knobval-knobStep)) {
@@ -480,7 +492,7 @@ void loop() {
               Serial_Debug.print(choonNum);
               Serial_Debug.println(". ");
             #endif
-            playMP3(choons[choonNum]); 
+            playMP3(choons[choonNum]);
           }
           knobval=knobval-knobStep;
           choonNum++;
@@ -509,7 +521,7 @@ void loop() {
     //all the way up ch3=2000
     isAutodomeEnabled=true;
     //autodomeInterval=txChannels[3]*5; //sets frequency of autodome moves based on the left sticks vertical position
-    autodomeInterval=map(txChannels[3],1000,2000,2000*5,1000); //sets frequency of autodome moves based on the left sticks vertical position  
+    autodomeInterval=map(txChannels[3],1000,2000,2000*5,1000); //sets frequency of autodome moves based on the left sticks vertical position
     #if (DEBUG==1)
       //Serial_Debug.print("interval");
       //Serial_Debug.println(autodomeInterval);
@@ -525,5 +537,5 @@ void loop() {
     }
   }
   domeDrive();
-  
+
 }
